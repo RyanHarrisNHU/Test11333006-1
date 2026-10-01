@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>進位制轉換動態測驗</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 650px;
+      margin: 30px auto;
+      padding: 20px;
+      background-color: #f4f7f6;
+      color: #333;
+    }
+    .card {
+      background: white;
+      padding: 25px;
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    h2 {
+      text-align: center;
+      color: #2c3e50;
+    }
+    .input-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 10px;
+      box-sizing: border-box;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-size: 16px;
+    }
+    .question-box {
+      background: #eef2f5;
+      padding: 15px;
+      border-left: 5px solid #3498db;
+      margin-bottom: 15px;
+      border-radius: 3px;
+    }
+    .question-text {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+    button {
+      width: 100%;
+      padding: 12px;
+      background-color: #3498db;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-size: 18px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    button:hover {
+      background-color: #2980b9;
+    }
+    button:disabled {
+      background-color: #bdc3c7;
+      cursor: not-allowed;
+    }
+    #result {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 5px;
+      display: none;
+      text-align: center;
+      font-size: 18px;
+    }
+    .success { background-color: #d4edda; color: #155724; }
+    .error { background-color: #f8d7da; color: #721c24; }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h2>進位制轉換線上測驗</h2>
+  
+  <div class="input-group">
+    <label for="studentName">姓名 / 學號：</label>
+    <input type="text" id="studentName" placeholder="請輸入姓名或學號" required>
+  </div>
+
+  <div id="quiz-container">
+    <!-- 題目會由 JavaScript 動態生成於此 -->
+  </div>
+
+  <button id="submit-btn" onclick="submitQuiz()">提交答案並儲存成績</button>
+  
+  <div id="result"></div>
+</div>
+
+<script>
+  // ⚠️ 請填入你的 Google Apps Script Web App URL
+  const GAS_URL = "https://script.google.com/macros/s/AKfycbypeFh_bUckiu0xApx7nrgd15QvVQ-6ChiszIcdgroSBw3n55yY3_ZbQq-TJ90KgCuxug/exec";
+  
+  const TOTAL_QUESTIONS = 5; // 測驗總題數
+  let questionsData = [];
+
+  // 隨機產生指定範圍內的整數
+  function getRandomInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  // 生成單一進位測驗題目
+  function generateQuestion(id) {
+    const bases = [
+      { name: "二進位", base: 2 },
+      { name: "八進位", base: 8 },
+      { name: "十進位", base: 10 },
+      { name: "十六進位", base: 16 }
+    ];
+
+    // 隨機選取來源與目標進位（確保兩者不同）
+    let fromIdx = getRandomInt(0, bases.length - 1);
+    let toIdx;
+    do {
+      toIdx = getRandomInt(0, bases.length - 1);
+    } while (fromIdx === toIdx);
+
+    const fromBase = bases[fromIdx];
+    const toBase = bases[toIdx];
+
+    // 隨機產生 1 ~ 255 之間的數值
+    const numValue = getRandomInt(1, 255);
+    
+    // 轉換為對應進位字串（十六進位轉大寫）
+    const questionNumStr = numValue.toString(fromBase.base).toUpperCase();
+    const correctAnsStr = numValue.toString(toBase.base).toUpperCase();
+
+    return {
+      id: id,
+      questionText: `請將 ${fromBase.name} 的 <span style="color:#e74c3c;">${questionNumStr}</span> 轉換為 <b>${toBase.name}</b>：`,
+      correctAnswer: correctAnsStr
+    };
+  }
+
+  // 渲染所有題目至網頁
+  function initQuiz() {
+    const container = document.getElementById("quiz-container");
+    container.innerHTML = "";
+    questionsData = [];
+
+    for (let i = 1; i <= TOTAL_QUESTIONS; i++) {
+      const q = generateQuestion(i);
+      questionsData.push(q);
+
+      const qDiv = document.createElement("div");
+      qDiv.className = "question-box";
+      qDiv.innerHTML = `
+        <div class="question-text">第 ${i} 題：${q.questionText}</div>
+        <input type="text" id="ans-${i}" placeholder="請輸入答案 (英文不分大小寫)" autocomplete="off">
+      `;
+      container.appendChild(qDiv);
+    }
+  }
+
+  // 結算分數並傳送至 Google Sheets
+  function submitQuiz() {
+    const studentName = document.getElementById("studentName").value.trim();
+    if (!studentName) {
+      alert("請先填寫姓名或學號！");
+      return;
+    }
+
+    let score = 0;
+    // 計分
+    questionsData.forEach(q => {
+      const userAns = document.getElementById(`ans-${q.id}`).value.trim().toUpperCase();
+      if (userAns === q.correctAnswer) {
+        score += (100 / TOTAL_QUESTIONS);
+      }
+    });
+
+    // 停用按鈕防止重複傳送
+    const submitBtn = document.getElementById("submit-btn");
+    submitBtn.disabled = true;
+    submitBtn.innerText = "資料傳送中...";
+
+    const payload = {
+      timestamp: new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" }),
+      studentName: studentName,
+      score: score,
+      totalQuestions: TOTAL_QUESTIONS
+    };
+
+    // 使用 fetch API 以 POST 方式傳送至 GAS
+    fetch(GAS_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8", // GAS 接收 JSON body 時建議設為 text/plain
+      },
+      body: JSON.stringify(payload)
+    })
+    .then(response => response.json())
+    .then(data => {
+      const resultDiv = document.getElementById("result");
+      resultDiv.style.display = "block";
+      
+      if (data.result === "success") {
+        resultDiv.className = "success";
+        resultDiv.innerHTML = `🎉 測驗完成！<br><b>${studentName}</b> 的得分為：<b>${score}</b> / 100 分<br>成績已成功儲存！`;
+      } else {
+        resultDiv.className = "error";
+        resultDiv.innerText = "成績儲存失敗，請聯繫管理者。";
+      }
+      submitBtn.innerText = "已提交";
+    })
+    .catch(error => {
+      console.error("Error:", error);
+      const resultDiv = document.getElementById("result");
+      resultDiv.style.display = "block";
+      resultDiv.className = "error";
+      resultDiv.innerText = "傳送失敗，請確認網路連線或 GAS URL 是否正確。";
+      submitBtn.disabled = false;
+      submitBtn.innerText = "重新提交";
+    });
+  }
+
+  // 初始化載入題目
+  window.onload = initQuiz;
+</script>
+
+</body>
+</html>
